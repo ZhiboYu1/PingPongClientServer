@@ -7,11 +7,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/time.h>
 
 /* simple client, takes two parameters, the server domain name,
 and the server port number */
 
 int main(int argc, char** argv) {
+  struct timeval tvalAfter;
+  gettimeofday (&tvalAfter, NULL);
   
   /* our client socket */
   int sock;
@@ -58,9 +61,18 @@ int main(int argc, char** argv) {
     abort();
   }
   
-  // first 2 bytes to the total size
+  // first 2 bytes for the data size
   uint16_t total_size = htons((uint16_t)size_param);
   memcpy(buffer, &total_size, 2); 
+
+  // next 8 bytes for the datas time (seconds)
+  uint64_t second = htons((uint16_t)tvalAfter.tv_sec); 
+  memcpy(buffer, &second, 8); 
+
+  // next 8 bytes for the datas time (milli-seconds)
+  uint64_t milliseconds = htons((uint16_t)tvalAfter.tv_usec); 
+  memcpy(buffer, &milliseconds, 8); 
+
 
   sendbuffer = (char *) malloc(size);
   if (!sendbuffer)
