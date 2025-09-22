@@ -32,6 +32,12 @@ int main(int argc, char** argv) {
   
   /* server port number */
   unsigned short server_port = atoi (argv[2]);
+
+  /* size in bytes of each message to send*/
+  unsigned int size_param = atoi (argv[3]); 
+  /* number of message exchanges to perform */
+  unsigned int count_param = atoi (argv[4]); 
+
   
   char *buffer, *sendbuffer;
   int size = 500;
@@ -52,6 +58,10 @@ int main(int argc, char** argv) {
     abort();
   }
   
+  // first 2 bytes to the total size
+  uint16_t total_size = htons((uint16_t)size_param);
+  memcpy(buffer, &total_size, 2); 
+
   sendbuffer = (char *) malloc(size);
   if (!sendbuffer)
   {
@@ -81,98 +91,102 @@ int main(int argc, char** argv) {
   }
 
   // Now that we've successfully connected, let's send a ping to the server.
-  int ping_send = send(sock, "PING", 5, 0);
+  for (unsigned int i = 0; i < count_param; i++) {
+    
+    int ping_send = send(sock, buffer, size_param, 0);
 
-  if (ping_send < 0) {
-    printf("Error with sending.\n");
-  }
+    if (ping_send < 0) {
+      printf("Error with sending.\n");
+      break;
+    }
 
-  // Now let's receive the pong back.
-  int pong_receive = recv(sock, buffer, 5, 0);
+    // Now let's receive the pong back.
+    int pong_receive = recv(sock, buffer, size_param, 0);
 
-  if (pong_receive < 0) {
-    printf("Error with receiving.\n");
-  }
+    if (pong_receive < 0) {
+      printf("Error with receiving.\n");
+      break;
+    }
 
-  printf(buffer);
-  
-  return 0;
-
-  /* everything looks good, since we are expecting a
-  message from the server in this example, let's try receiving a
-  message from the socket. this call will block until some data
-  has been received */
-  count = recv(sock, buffer, size, 0);
-  if (count < 0)
-  {
-    perror("receive failure");
-    abort();
-  }
-  
-  /* in this simple example, the message is a string, 
-  we expect the last byte of the string to be 0, i.e. end of string */
-  if (buffer[count-1] != 0)
-  {
-    /* In general, TCP recv can return any number of bytes, not
-    necessarily forming a complete message, so you need to
-    parse the input to see if a complete message has been received.
-    if not, more calls to recv is needed to get a complete message.
-    */
-    printf("Message incomplete, something is still being transmitted\n");
-  } 
-  else
-  {
-    // printf("Here is what we got: %s", buffer);
     printf(buffer);
+    return 0;
   }
+
+//   /* everything looks good, since we are expecting a
+//   message from the server in this example, let's try receiving a
+//   message from the socket. this call will block until some data
+//   has been received */
+//   count = recv(sock, buffer, size, 0);
+//   if (count < 0)
+//   {
+//     perror("receive failure");
+//     abort();
+//   }
   
-  while (1){ 
-    printf("\nEnter the type of the number to send (options are char, short, int, or bye to quit): ");
-    fgets(buffer, size, stdin);
-    if (strncmp(buffer, "bye", 3) == 0) {
-      /* free the resources, generally important! */
-      close(sock);
-      free(buffer);
-      free(sendbuffer);
-      return 0;
-    }
+//   /* in this simple example, the message is a string, 
+//   we expect the last byte of the string to be 0, i.e. end of string */
+//   if (buffer[count-1] != 0)
+//   {
+//     /* In general, TCP recv can return any number of bytes, not
+//     necessarily forming a complete message, so you need to
+//     parse the input to see if a complete message has been received.
+//     if not, more calls to recv is needed to get a complete message.
+//     */
+//     printf("Message incomplete, something is still being transmitted\n");
+//   } 
+//   else
+//   {
+//     // printf("Here is what we got: %s", buffer);
+//     printf(buffer);
+//   }
+  
+//   while (1){ 
+//     printf("\nEnter the type of the number to send (options are char, short, int, or bye to quit): ");
+//     fgets(buffer, size, stdin);
+//     if (strncmp(buffer, "bye", 3) == 0) {
+//       /* free the resources, generally important! */
+//       close(sock);
+//       free(buffer);
+//       free(sendbuffer);
+//       return 0;
+//     }
     
-    /* first byte of the sendbuffer is used to describe the number of
-    bytes used to encode a number, the number value follows the first 
-    byte */
-    if (strncmp(buffer, "char", 4) == 0) {
-      sendbuffer[0] = 1;
-    } else if (strncmp(buffer, "short", 5) == 0) {
-      sendbuffer[0] = 2;
-    } else if (strncmp(buffer, "int", 3) == 0) {
-      sendbuffer[0] = 4;
-    } else {
-      printf("Invalid number type entered, %s\n", buffer);
-      continue;
-    }
+//     /* first byte of the sendbuffer is used to describe the number of
+//     bytes used to encode a number, the number value follows the first 
+//     byte */
+//     if (strncmp(buffer, "char", 4) == 0) {
+//       sendbuffer[0] = 1;
+//     } else if (strncmp(buffer, "short", 5) == 0) {
+//       sendbuffer[0] = 2;
+//     } else if (strncmp(buffer, "int", 3) == 0) {
+//       sendbuffer[0] = 4;
+//     } else {
+//       printf("Invalid number type entered, %s\n", buffer);
+//       continue;
+//     }
     
-    printf("Enter the value of the number to send: ");
-    fgets(buffer, size, stdin);
-    num = atol(buffer);
+//     printf("Enter the value of the number to send: ");
+//     fgets(buffer, size, stdin);
+//     num = atol(buffer);
     
-    switch(sendbuffer[0]) {
-      case 1:
-      *(char *) (sendbuffer+1) = (char) num;
-      break;
-      case 2:
-      /* for 16 bit integer type, byte ordering matters */
-      *(short *) (sendbuffer+1) = (short) htons(num);
-      break;
-      case 4:
-      /* for 32 bit integer type, byte ordering matters */
-      *(int *) (sendbuffer+1) = (int) htonl(num);
-      break;
-      default:
-      break;
-    }
-    // send(sock, sendbuffer, sendbuffer[0]+1, 0);
-    send(sock, "PING", 5, 0);
-  }
+//     switch(sendbuffer[0]) {
+//       case 1:
+//       *(char *) (sendbuffer+1) = (char) num;
+//       break;
+//       case 2:
+//       /* for 16 bit integer type, byte ordering matters */
+//       *(short *) (sendbuffer+1) = (short) htons(num);
+//       break;
+//       case 4:
+//       /* for 32 bit integer type, byte ordering matters */
+//       *(int *) (sendbuffer+1) = (int) htonl(num);
+//       break;
+//       default:
+//       break;
+//     }
+//     // send(sock, sendbuffer, sendbuffer[0]+1, 0);
+//     send(sock, "PING", 5, 0);
+//   }
   
   return 0;
 }

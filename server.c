@@ -227,6 +227,7 @@ int main(int argc, char **argv) {
           /* remember this client connection in our linked list */
           add(&head, new_sock, addr);
           
+          // change 1 made 
           /* let's send a message to the client just for fun */
           // count = send(new_sock, message, strlen(message)+1, 0);
           // count = send(new_sock, "PONG", 5, 0);
