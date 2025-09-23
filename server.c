@@ -239,20 +239,29 @@ int main(int argc, char **argv) {
         }
 
         // Client accepted the connection, now let's receive their ping.
-        int ping_receive = recv(new_sock, buf, 5, 0);
 
-        if (ping_receive > 0) {
-          printf(buf);
+        while (1) {
+          // int ping_receive = recv(new_sock, buf, 5, 0);
+          int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
+
+          if (ping_receive > 0) {
+            printf(buf);
+            printf("\n");
+          }
+
+          // Now send a pong back.
+          // int pong_send = send(new_sock, "PONG", 5, 0);
+          int pong_send = send(new_sock, buf, sizeof(buf), 0);
+
+          if (pong_send < 0) {
+            printf("Error with sending.\n");
+          }
         }
+        
 
-        // Now send a pong back.
-        int pong_send = send(new_sock, "PONG", 5, 0);
+        printf("got here server\n");
 
-        if (pong_send < 0) {
-          printf("Error with sending.\n");
-        }
-
-        return 0;
+        // return 0;
         
         /* check other connected sockets, see if there is
         anything to read or some socket is ready to send

@@ -12,6 +12,13 @@
 /* simple client, takes two parameters, the server domain name,
 and the server port number */
 
+typedef struct msg {
+  unsigned short sz;
+  unsigned long time1;
+  unsigned long time2;
+  char txt[65536];
+} msg;
+
 int main(int argc, char** argv) {
   struct timeval tvalAfter;
   gettimeofday (&tvalAfter, NULL);
@@ -54,12 +61,15 @@ int main(int argc, char** argv) {
   
   leaves the potential for
   buffer overflow vulnerability */
+
   buffer = (char *) malloc(size);
   if (!buffer)
   {
     perror("failed to allocated buffer");
     abort();
   }
+
+  char input_buffer[65536];
   
   // first 2 bytes for the data size
   uint16_t total_size = htons((uint16_t)size_param);
@@ -102,18 +112,40 @@ int main(int argc, char** argv) {
     abort();
   }
 
+  scanf("%s", input_buffer);
+
+  // create the struct for the msg
+  msg curr_msg;
+  curr_msg.sz = size_param;
+  curr_msg.time1 = 0; // not worried with times yet
+  curr_msg.time2 = 0; //
+  strcpy(curr_msg.txt, input_buffer);
+
+  // Quick sanity check
+  printf("Input txt is: \n");
+  printf(curr_msg.txt);
+  printf("\n");
+
   // Now that we've successfully connected, let's send a ping to the server.
   for (unsigned int i = 0; i < count_param; i++) {
     
-    int ping_send = send(sock, buffer, size_param, 0);
+    // int ping_send = send(sock, input_buffer, size_param, 0);
+    // int ping_send = send(sock, "PING", 5, 0);
+
+    // NOTE: need to do network-byte order stuff here
+
+    int ping_send = send(sock, &curr_msg, size_param, 0);
 
     if (ping_send < 0) {
       printf("Error with sending.\n");
       break;
     }
 
+    printf("Successfully sent from client.\n");
+
     // Now let's receive the pong back.
     int pong_receive = recv(sock, buffer, size_param, 0);
+    // int pong_receive = recv(sock, buffer, 5, 0);
 
     if (pong_receive < 0) {
       printf("Error with receiving.\n");
@@ -121,8 +153,11 @@ int main(int argc, char** argv) {
     }
 
     printf(buffer);
-    return 0;
+    printf("\n");
+    // return 0;
   }
+
+  printf("got here client\n");
 
 //   /* everything looks good, since we are expecting a
 //   message from the server in this example, let's try receiving a
