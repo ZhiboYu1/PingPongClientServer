@@ -119,14 +119,10 @@ int main(int argc, char** argv) {
   unsigned char msg_buf[size_param]; // the buffer we'll pass to send()
 
   uint16_t net_size_param = htons(size_param);
-  uint64_t net_time1 = htobe64(0);
-  uint64_t net_time2 = htobe64(0);
-
+  
   memcpy(msg_buf, &net_size_param, 2);
-  memcpy(msg_buf + 2, &net_time1, 8);
-  memcpy(msg_buf + 10, &net_time2, 8);
 
-  // memset(msg_buf + 18, 0, size_param - 18);
+  // memset(msg_buf + 18, 0, size_param - 18); resetting
 
   char inp_text[size_param - 17];
 
@@ -140,6 +136,14 @@ int main(int argc, char** argv) {
     // int ping_send = send(sock, input_buffer, size_param, 0);
     // int ping_send = send(sock, "PING", 5, 0);
 
+    struct timeval tval_send;
+    gettimeofday(&tval_send, NULL);
+
+    uint64_t net_time1 = htobe64(tval_send.tv_sec);
+    uint64_t net_time2 = htobe64(tval_send.tv_usec);
+    memcpy(msg_buf + 2, &net_time1, 8);
+    memcpy(msg_buf + 10, &net_time2, 8);
+
     // NOTE: need to do network-byte order stuff here
 
     // int ping_send = send(sock, &curr_details, sizeof(curr_details), 0);
@@ -150,20 +154,36 @@ int main(int argc, char** argv) {
       break;
     }
 
-    // printf("Successfully sent from client.\n");
-
     // Now let's receive the pong back.
     int pong_receive = recv(sock, buffer, size_param, MSG_WAITALL);
     // int pong_receive = recv(sock, buffer, 5, 0);
+
+    // let's record the receiving timestamp
+    struct timeval tval_curr;
+    gettimeofday(&tval_curr, NULL);
 
     if (pong_receive <= 0) {
       printf("Error with receiving.\n");
       break;
     }
 
+    uint64_t orig_time1;
+    memcpy(&orig_time1, buffer + 2, 8);
+    orig_time1 = be64toh(orig_time1);
+
+    uint64_t orig_time2;
+    memcpy(&orig_time2, buffer + 10, 8);
+    orig_time2 = be64toh(orig_time2);
+
+    uint64_t final_time1, final_time2;
+    final_time1 = (uint64_t) 1000000 * (uint64_t) orig_time1 + (uint64_t) orig_time2;
+    final_time2 = (uint64_t) 1000000 * (uint64_t) tval_curr.tv_sec + (uint64_t) tval_curr.tv_usec;
+
+    double curr_lat = (uint64_t) (final_time2 - final_time1) / (double) 1000;
+    printf("%f", curr_lat);
+    printf("\n");
+
     fwrite(buffer + 18, 1, size_param - 18, stdout);
-    
-    // return 0;
   }
 
   printf("got here client\n");

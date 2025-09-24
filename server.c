@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
             break;
           }
 
-          fwrite(buf, 1, ping_receive, stdout);
+          fwrite(buf + 18, 1, ping_receive - 18, stdout);
 
           // Now send a pong back.
           // int pong_send = send(new_sock, "PONG", 5, 0);
