@@ -99,10 +99,11 @@ int main(int argc, char **argv) {
   struct node *current, *next;
   
   /* a buffer to read data */
-  char *buf;
+  // char *buf;
   int BUF_LEN = 1000;
   
-  buf = (char *)malloc(BUF_LEN);
+  // buf = (char *)malloc(BUF_LEN);
+  unsigned char buf[65536];
   
   /* initialize dummy head node of linked list */
   head.socket = -1;
@@ -208,11 +209,13 @@ int main(int argc, char **argv) {
         stuck when trying to send data to a socket that
         has too much data to send already.
         */
-        if (fcntl (new_sock, F_SETFL, O_NONBLOCK) < 0)
-        {
-          perror ("making socket non-blocking");
-          abort ();
-        }
+
+
+        // if (fcntl (new_sock, F_SETFL, O_NONBLOCK) < 0)
+        // {
+        //   perror ("making socket non-blocking");
+        //   abort ();
+        // }
         
         /* the connection is made, everything is ready */
         /* let's see who's connecting to us */
@@ -244,24 +247,26 @@ int main(int argc, char **argv) {
           // int ping_receive = recv(new_sock, buf, 5, 0);
           int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
 
-          if (ping_receive > 0) {
-            printf(buf);
-            printf("\n");
+          if (ping_receive <= 0) {
+            break;
           }
+
+          fwrite(buf, 1, ping_receive, stdout);
 
           // Now send a pong back.
           // int pong_send = send(new_sock, "PONG", 5, 0);
-          int pong_send = send(new_sock, buf, sizeof(buf), 0);
+          int pong_send = send(new_sock, buf, ping_receive, 0);
 
           if (pong_send < 0) {
             printf("Error with sending.\n");
+            break;
           }
         }
         
 
         printf("got here server\n");
 
-        // return 0;
+        return 0;
         
         /* check other connected sockets, see if there is
         anything to read or some socket is ready to send

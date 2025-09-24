@@ -12,12 +12,11 @@
 /* simple client, takes two parameters, the server domain name,
 and the server port number */
 
-typedef struct msg {
+typedef struct msg_details {
   unsigned short sz;
   unsigned long time1;
   unsigned long time2;
-  char txt[65536];
-} msg;
+} msg_details;
 
 int main(int argc, char** argv) {
   struct timeval tvalAfter;
@@ -112,52 +111,64 @@ int main(int argc, char** argv) {
     abort();
   }
 
-  scanf("%s", input_buffer);
-
-  // create the struct for the msg
-  msg curr_msg;
-  curr_msg.sz = size_param;
-  curr_msg.time1 = 0; // not worried with times yet
-  curr_msg.time2 = 0; //
-  strcpy(curr_msg.txt, input_buffer);
-
   // Quick sanity check
-  printf("Input txt is: \n");
-  printf(curr_msg.txt);
-  printf("\n");
+  // printf("Input txt is: \n");
+  // printf(curr_msg.txt);
+  // printf("\n");
+
+  unsigned char msg_buf[size_param]; // the buffer we'll pass to send()
+
+  uint16_t net_size_param = htons(size_param);
+  uint64_t net_time1 = htobe64(0);
+  uint64_t net_time2 = htobe64(0);
+
+  memcpy(msg_buf, &net_size_param, 2);
+  memcpy(msg_buf + 2, &net_time1, 8);
+  memcpy(msg_buf + 10, &net_time2, 8);
+
+  // memset(msg_buf + 18, 0, size_param - 18);
+
+  char inp_text[size_param - 17];
+
+  fgets(inp_text, sizeof(inp_text), stdin);
+  memcpy(msg_buf + 18, inp_text, size_param - 18);
+  
+  // fread(msg_buf + 18, 1, size_param - 18, stdin);
 
   // Now that we've successfully connected, let's send a ping to the server.
   for (unsigned int i = 0; i < count_param; i++) {
-    
     // int ping_send = send(sock, input_buffer, size_param, 0);
     // int ping_send = send(sock, "PING", 5, 0);
 
     // NOTE: need to do network-byte order stuff here
 
-    int ping_send = send(sock, &curr_msg, size_param, 0);
+    // int ping_send = send(sock, &curr_details, sizeof(curr_details), 0);
+    int ping_send = send(sock, msg_buf, size_param, 0);
 
     if (ping_send < 0) {
       printf("Error with sending.\n");
       break;
     }
 
-    printf("Successfully sent from client.\n");
+    // printf("Successfully sent from client.\n");
 
     // Now let's receive the pong back.
-    int pong_receive = recv(sock, buffer, size_param, 0);
+    int pong_receive = recv(sock, buffer, size_param, MSG_WAITALL);
     // int pong_receive = recv(sock, buffer, 5, 0);
 
-    if (pong_receive < 0) {
+    if (pong_receive <= 0) {
       printf("Error with receiving.\n");
       break;
     }
 
-    printf(buffer);
-    printf("\n");
+    fwrite(buffer + 18, 1, size_param - 18, stdout);
+    
     // return 0;
   }
 
   printf("got here client\n");
+
+  return 0;
 
 //   /* everything looks good, since we are expecting a
 //   message from the server in this example, let's try receiving a
