@@ -71,17 +71,17 @@ int main(int argc, char** argv) {
 
   char input_buffer[65536];
   
-  // first 2 bytes for the data size
-  uint16_t total_size = htons((uint16_t)size_param);
-  memcpy(buffer, &total_size, 2); 
+  // // first 2 bytes for the data size
+  // uint16_t total_size = htons((uint16_t)size_param);
+  // memcpy(buffer, &total_size, 2); 
 
-  // next 8 bytes for the datas time (seconds)
-  uint64_t second = htons((uint16_t)tvalAfter.tv_sec); 
-  memcpy(buffer, &second, 8); 
+  // // next 8 bytes for the datas time (seconds)
+  // uint64_t second = htons((uint16_t)tvalAfter.tv_sec); 
+  // memcpy(buffer, &second, 8); 
 
-  // next 8 bytes for the datas time (milli-seconds)
-  uint64_t milliseconds = htons((uint16_t)tvalAfter.tv_usec); 
-  memcpy(buffer, &milliseconds, 8); 
+  // // next 8 bytes for the datas time (milli-seconds)
+  // uint64_t milliseconds = htons((uint16_t)tvalAfter.tv_usec); 
+  // memcpy(buffer, &milliseconds, 8); 
 
 
   sendbuffer = (char *) malloc(size);
@@ -117,8 +117,8 @@ int main(int argc, char** argv) {
   // create the struct for the msg
   msg curr_msg;
   curr_msg.sz = size_param;
-  curr_msg.time1 = 0; // not worried with times yet
-  curr_msg.time2 = 0; //
+  curr_msg.time1 = 0; 
+  curr_msg.time2 = 0; 
   strcpy(curr_msg.txt, input_buffer);
 
   // Quick sanity check
@@ -128,9 +128,12 @@ int main(int argc, char** argv) {
 
   // Now that we've successfully connected, let's send a ping to the server.
   for (unsigned int i = 0; i < count_param; i++) {
-    
     // int ping_send = send(sock, input_buffer, size_param, 0);
     // int ping_send = send(sock, "PING", 5, 0);
+
+    // Time this message will be sent
+    curr_msg.time1 = tvalAfter.tv_sec; 
+    curr_msg.time2 = tvalAfter.tv_usec; 
 
     // NOTE: need to do network-byte order stuff here
 
@@ -141,7 +144,9 @@ int main(int argc, char** argv) {
       break;
     }
 
-    printf("Successfully sent from client.\n");
+    printf("Successfully sent from client...Count = %u\n", i +1 );
+    printf("Time = %u\n", curr_msg.time2);
+
 
     // Now let's receive the pong back.
     int pong_receive = recv(sock, buffer, size_param, 0);

@@ -13,6 +13,13 @@
 /* a few simple linked list functions             */
 /**************************************************/
 
+// andys msg struct
+typedef struct msg {
+  unsigned short sz;
+  unsigned long time1;
+  unsigned long time2;
+  char txt[65536];
+} msg;
 
 /* A linked list node data structure to maintain application
 information related to a connected socket */
@@ -238,11 +245,22 @@ int main(int argc, char **argv) {
           // }
         }
 
+        // local struct to hold the data
+        msg curr_msg;
         // Client accepted the connection, now let's receive their ping.
-
         while (1) {
           // int ping_receive = recv(new_sock, buf, 5, 0);
           int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
+          memcpy(&curr_msg, buf, sizeof(msg));
+
+          // test 
+          // printf("Time in server = %u\n", buf);
+
+          // add new header to server message that goes back to client -> with client data 
+            // this means decoding buf, keeping the message and replacing time
+          // compare the pong timestamp with the saved time stamp on client side that is saved the same time as the Ping message was sent
+            // just save to an array or something the differnce
+            // get average and print
 
           if (ping_receive > 0) {
             printf(buf);
@@ -254,7 +272,7 @@ int main(int argc, char **argv) {
           int pong_send = send(new_sock, buf, sizeof(buf), 0);
 
           if (pong_send < 0) {
-            printf("Error with sending.\n");
+            // printf("Error with sending.\n");
           }
         }
         
