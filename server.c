@@ -13,6 +13,21 @@
 /* a few simple linked list functions             */
 /**************************************************/
 
+typedef struct receive_status {
+  unsigned char rec_data[65536];
+  uint64_t num_rec;
+} rec_status;
+
+typedef struct send_status {
+  unsigned char send_data[65536];
+  uint64_t num_send;
+} send_status;
+
+// this is where we will keep the info abt what data still needs to be sent
+typedef struct status {
+  rec_status r_stat;
+  send_status s_stat;
+} status;
 
 /* A linked list node data structure to maintain application
 information related to a connected socket */
@@ -24,6 +39,7 @@ struct node {
   all the information regarding this socket.
   e.g. what data needs to be sent next */
   struct node *next;
+  status stat;
 };
 
 /* remove the data structure associated with a connected socket
@@ -51,6 +67,8 @@ void add(struct node *head, int socket, struct sockaddr_in addr) {
   struct node *new_node;
   
   new_node = (struct node *)malloc(sizeof(struct node));
+  (new_node->stat).r_stat.num_rec = (new_node->stat).s_stat.num_send = 0;
+  
   new_node->socket = socket;
   new_node->client_addr = addr;
   new_node->pending_data = 0;
@@ -98,12 +116,12 @@ int main(int argc, char **argv) {
   struct node head;
   struct node *current, *next;
   
-  /* a buffer to read data */
-  // char *buf;
-  int BUF_LEN = 1000;
+  // /* a buffer to read data */
+  // // char *buf;
+  // int BUF_LEN = 1000;
   
-  // buf = (char *)malloc(BUF_LEN);
-  unsigned char buf[65536];
+  // // buf = (char *)malloc(BUF_LEN);
+  // unsigned char buf[65536];
   
   /* initialize dummy head node of linked list */
   head.socket = -1;
@@ -209,13 +227,11 @@ int main(int argc, char **argv) {
         stuck when trying to send data to a socket that
         has too much data to send already.
         */
-
-
-        // if (fcntl (new_sock, F_SETFL, O_NONBLOCK) < 0)
-        // {
-        //   perror ("making socket non-blocking");
-        //   abort ();
-        // }
+        if (fcntl (new_sock, F_SETFL, O_NONBLOCK) < 0)
+        {
+          perror ("making socket non-blocking");
+          abort ();
+        }
         
         /* the connection is made, everything is ready */
         /* let's see who's connecting to us */
@@ -240,60 +256,102 @@ int main(int argc, char **argv) {
           //   abort();
           // }
         }
-
-        // Client accepted the connection, now let's receive their ping.
-
-        while (1) {
-          // int ping_receive = recv(new_sock, buf, 5, 0);
-          int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
-
-          if (ping_receive <= 0) {
-            break;
-          }
-
-          fwrite(buf + 18, 1, ping_receive - 18, stdout);
-
-          // Now send a pong back.
-          // int pong_send = send(new_sock, "PONG", 5, 0);
-          int pong_send = send(new_sock, buf, ping_receive, 0);
-
-          if (pong_send < 0) {
-            printf("Error with sending.\n");
-            break;
-          }
-        }
         
-
-        printf("got here server\n");
-
-        return 0;
+        // Client accepted the connection, now let's receive their ping.
+        
+        // while (1) {
+        //   // int ping_receive = recv(new_sock, buf, 5, 0);
+        //   int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
+          
+        //   if (ping_receive <= 0) {
+        //     break;
+        //   }
+          
+        //   fwrite(buf + 18, 1, ping_receive - 18, stdout);
+          
+        //   // Now send a pong back.
+        //   // int pong_send = send(new_sock, "PONG", 5, 0);
+        //   int pong_send = send(new_sock, buf, ping_receive, 0);
+          
+        //   if (pong_send < 0) {
+        //     printf("Error with sending.\n");
+        //     break;
+        //   }
+        // }
+        
+        
+        // printf("got here server\n");
+        
+        // return 0;
         
         /* check other connected sockets, see if there is
         anything to read or some socket is ready to send
         more pending data */
         for (current = head.next; current; current = next) {
+          int flag = 0;
+
           next = current->next;
           
           /* see if we can now do some previously unsuccessful writes */
-          if (FD_ISSET(current->socket, &write_set)) {
+          // here checking if sock can write
+          if (current->pending_data && FD_ISSET(current->socket, &write_set)) {
             /* the socket is now ready to take more data */
+            
+            // remember to wrap in an if to check if pending_data here
+            uint16_t data_size;
+            memcpy(&data_size, (current->stat).s_stat.send_data, 2);
+
+            data_size = ntohs(data_size);
+            
+            // while might need changing
+            while ((current->stat).s_stat.num_send < data_size) {
+              unsigned char *next_send = (current->stat).s_stat.send_data + (current->stat).s_stat.num_send;
+              ssize_t pong_send = send(current->socket, next_send, data_size - (current->stat).s_stat.num_send, 0);
+
+              if (pong_send == 0) {
+                flag = 1;
+                close(current->socket);
+                dump(&head, current->socket);
+                break;
+              }
+
+              if (pong_send < 0) {
+                if (errno == EWOULDBLOCK || errno == EAGAIN) break;
+                flag = 1;
+                close(current->socket);
+                dump(&head, current->socket);
+                break;
+              }
+              if (pong_send > 0) {
+                (current->stat).s_stat.num_send += pong_send;
+
+                if ((current->stat).s_stat.num_send == data_size) {
+                  (current->stat).s_stat.num_send = current->pending_data = 0;
+                  break;
+                }
+              }
+
+            }
+
+            if (flag) continue;
+
             /* the socket data structure should have information
             describing what data is supposed to be sent next.
             but here for simplicity, let's say we are just
             sending whatever is in the buffer buf
             */
-            count = send(current->socket, buf, BUF_LEN, MSG_DONTWAIT);
-            if (count < 0) {
-              if (errno == EAGAIN) {
-                /* we are trying to dump too much data down the socket,
-                it cannot take more for the time being 
-                will have to go back to select and wait til select
-                tells us the socket is ready for writing
-                */
-              } else {
-                /* something else is wrong */
-              }
-            }
+            // count = send(current->socket, buf, BUF_LEN, MSG_DONTWAIT);
+            // if (count < 0) {
+            //   if (errno == EAGAIN) {
+            //     /* we are trying to dump too much data down the socket,
+            //     it cannot take more for the time being 
+            //     will have to go back to select and wait til select
+            //     tells us the socket is ready for writing
+            //     */
+            //   } else {
+            //     /* something else is wrong */
+            //   }
+            // }
             /* note that it is important to check count for exactly
             how many bytes were actually sent even when there are
             no error. send() may send only a portion of the buffer
@@ -301,6 +359,7 @@ int main(int argc, char **argv) {
             */
           }
           
+          // here checking if sock can read
           if (FD_ISSET(current->socket, &read_set)) {
             /* we have data from a client */
             count = recv(current->socket, buf, BUF_LEN, 0);
