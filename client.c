@@ -92,6 +92,8 @@ int main(int argc, char** argv) {
   }
 
   // Now that we've successfully connected, let's send a ping to the server.
+
+  double tot_lat = 0.0;
   for (unsigned int i = 0; i < count_param; i++) {
     // int ping_send = send(sock, input_buffer, size_param, 0);
     // int ping_send = send(sock, "PING", 5, 0);
@@ -174,8 +176,9 @@ int main(int argc, char** argv) {
     final_time2 = (uint64_t) 1000000 * (uint64_t) tval_curr.tv_sec + (uint64_t) tval_curr.tv_usec;
 
     double curr_lat = (uint64_t) (final_time2 - final_time1) / (double) 1000;
-    printf("%.3f", curr_lat);
-    printf("\n");
+    tot_lat += curr_lat;
+    // printf("%.3f", curr_lat);
+    // printf("\n");
 
     if (argc >= 7) {
       fwrite(pong + 18, 1, size_param - 18, stdout);
@@ -183,6 +186,8 @@ int main(int argc, char** argv) {
     }
     
   }
+
+  printf("%.3f", (double) tot_lat / count_param);
 
   return 0;
 }
