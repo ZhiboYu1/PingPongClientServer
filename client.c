@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <errno.h>
 
 /* simple client, takes two parameters, the server domain name,
 and the server port number */
@@ -44,52 +45,31 @@ int main(int argc, char** argv) {
 
   /* size in bytes of each message to send*/
   unsigned int size_param = atoi (argv[3]); 
+
   /* number of message exchanges to perform */
   unsigned int count_param = atoi (argv[4]); 
 
-  
-  char *buffer, *sendbuffer;
-  int size = 500;
-  int count;
-  int num;
-  
-  /* allocate a memory buffer in the heap */
-  /* putting a buffer on the stack like:
-  
-  char buffer[500];
-  
-  leaves the potential for
-  buffer overflow vulnerability */
-
-  buffer = (char *) malloc(size);
-  if (!buffer)
-  {
-    perror("failed to allocated buffer");
-    abort();
+  // just for making sure the message is being sent correctly, we can remove later
+  char *debug_text = "";
+  if (argc >= 6) {
+    if (strcmp(argv[5], "-m") == 0) {
+      if (argc >= 7) {
+        debug_text = argv[6];
+      }
+    }
   }
 
-  char input_buffer[65536];
-  
-  // first 2 bytes for the data size
+  unsigned char *ping, *pong;
+  ping = malloc(size_param);
+  pong = malloc(size_param);
+
   uint16_t total_size = htons((uint16_t)size_param);
-  memcpy(buffer, &total_size, 2); 
+  memcpy(ping, &total_size, 2); 
+  memset(ping + 18, 0, size_param - 18); // is this necessary? Isn't already 0 by default?
 
-  // next 8 bytes for the datas time (seconds)
-  uint64_t second = htons((uint16_t)tvalAfter.tv_sec); 
-  memcpy(buffer, &second, 8); 
-
-  // next 8 bytes for the datas time (milli-seconds)
-  uint64_t milliseconds = htons((uint16_t)tvalAfter.tv_usec); 
-  memcpy(buffer, &milliseconds, 8); 
-
-
-  sendbuffer = (char *) malloc(size);
-  if (!sendbuffer)
-  {
-    perror("failed to allocated sendbuffer");
-    abort();
+  if (argc >= 7) {
+    memcpy(ping + 18, debug_text, strlen(debug_text));
   }
-  
   
   /* create a socket */
   if ((sock = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -111,26 +91,6 @@ int main(int argc, char** argv) {
     abort();
   }
 
-  // Quick sanity check
-  // printf("Input txt is: \n");
-  // printf(curr_msg.txt);
-  // printf("\n");
-
-  unsigned char msg_buf[size_param]; // the buffer we'll pass to send()
-
-  uint16_t net_size_param = htons(size_param);
-  
-  memcpy(msg_buf, &net_size_param, 2);
-
-  // memset(msg_buf + 18, 0, size_param - 18); resetting
-
-  char inp_text[size_param - 17];
-
-  fgets(inp_text, sizeof(inp_text), stdin);
-  memcpy(msg_buf + 18, inp_text, size_param - 18);
-  
-  // fread(msg_buf + 18, 1, size_param - 18, stdin);
-
   // Now that we've successfully connected, let's send a ping to the server.
   for (unsigned int i = 0; i < count_param; i++) {
     // int ping_send = send(sock, input_buffer, size_param, 0);
@@ -141,38 +101,72 @@ int main(int argc, char** argv) {
 
     uint64_t net_time1 = htobe64(tval_send.tv_sec);
     uint64_t net_time2 = htobe64(tval_send.tv_usec);
-    memcpy(msg_buf + 2, &net_time1, 8);
-    memcpy(msg_buf + 10, &net_time2, 8);
+    memcpy(ping + 2, &net_time1, 8);
+    memcpy(ping + 10, &net_time2, 8);
 
-    // NOTE: need to do network-byte order stuff here
+    unsigned int left_ping, left_pong;
+    left_ping = size_param;
+    left_pong = size_param;
 
-    // int ping_send = send(sock, &curr_details, sizeof(curr_details), 0);
-    int ping_send = send(sock, msg_buf, size_param, 0);
+    unsigned char *ping2, *pong2;
+    ping2 = ping;
+    pong2 = pong;
 
-    if (ping_send < 0) {
-      printf("Error with sending.\n");
-      break;
+    while (left_ping > 0) {
+      ssize_t ping_send = send(sock, ping2, left_ping, 0);
+
+      if (ping_send > 0) {
+        left_ping -= ping_send;
+        ping2 += ping_send;
+        continue;
+      }
+
+      if (ping_send == 0) {
+        exit(1);
+      }
+
+      if (errno == EAGAIN || errno == EINTR) {
+        continue;
+      }
+
+      exit(1);
     }
 
-    // Now let's receive the pong back.
-    int pong_receive = recv(sock, buffer, size_param, MSG_WAITALL);
-    // int pong_receive = recv(sock, buffer, 5, 0);
+    while (left_pong > 0) {
+      ssize_t pong_send = recv(sock, pong2, left_pong, 0);
+
+      if (pong_send > 0) {
+        left_pong -= pong_send;
+        pong2 += pong_send;
+        continue;
+      }
+
+      if (pong_send == 0) {
+        exit(1);
+      }
+
+      if (errno == EAGAIN || errno == EINTR) {
+        continue;
+      }
+
+      exit(1);
+    }
 
     // let's record the receiving timestamp
     struct timeval tval_curr;
     gettimeofday(&tval_curr, NULL);
 
-    if (pong_receive <= 0) {
-      printf("Error with receiving.\n");
-      break;
-    }
+    // if (pong_receive <= 0) {
+    //   printf("Error with receiving.\n");
+    //   break;
+    // }
 
     uint64_t orig_time1;
-    memcpy(&orig_time1, buffer + 2, 8);
+    memcpy(&orig_time1, pong + 2, 8);
     orig_time1 = be64toh(orig_time1);
 
     uint64_t orig_time2;
-    memcpy(&orig_time2, buffer + 10, 8);
+    memcpy(&orig_time2, pong + 10, 8);
     orig_time2 = be64toh(orig_time2);
 
     uint64_t final_time1, final_time2;
@@ -180,91 +174,15 @@ int main(int argc, char** argv) {
     final_time2 = (uint64_t) 1000000 * (uint64_t) tval_curr.tv_sec + (uint64_t) tval_curr.tv_usec;
 
     double curr_lat = (uint64_t) (final_time2 - final_time1) / (double) 1000;
-    printf("%f", curr_lat);
+    printf("%.3f", curr_lat);
     printf("\n");
 
-    fwrite(buffer + 18, 1, size_param - 18, stdout);
+    if (argc >= 7) {
+      fwrite(pong + 18, 1, size_param - 18, stdout);
+      printf("\n");
+    }
+    
   }
 
-  printf("got here client\n");
-
-  return 0;
-
-//   /* everything looks good, since we are expecting a
-//   message from the server in this example, let's try receiving a
-//   message from the socket. this call will block until some data
-//   has been received */
-//   count = recv(sock, buffer, size, 0);
-//   if (count < 0)
-//   {
-//     perror("receive failure");
-//     abort();
-//   }
-  
-//   /* in this simple example, the message is a string, 
-//   we expect the last byte of the string to be 0, i.e. end of string */
-//   if (buffer[count-1] != 0)
-//   {
-//     /* In general, TCP recv can return any number of bytes, not
-//     necessarily forming a complete message, so you need to
-//     parse the input to see if a complete message has been received.
-//     if not, more calls to recv is needed to get a complete message.
-//     */
-//     printf("Message incomplete, something is still being transmitted\n");
-//   } 
-//   else
-//   {
-//     // printf("Here is what we got: %s", buffer);
-//     printf(buffer);
-//   }
-  
-//   while (1){ 
-//     printf("\nEnter the type of the number to send (options are char, short, int, or bye to quit): ");
-//     fgets(buffer, size, stdin);
-//     if (strncmp(buffer, "bye", 3) == 0) {
-//       /* free the resources, generally important! */
-//       close(sock);
-//       free(buffer);
-//       free(sendbuffer);
-//       return 0;
-//     }
-    
-//     /* first byte of the sendbuffer is used to describe the number of
-//     bytes used to encode a number, the number value follows the first 
-//     byte */
-//     if (strncmp(buffer, "char", 4) == 0) {
-//       sendbuffer[0] = 1;
-//     } else if (strncmp(buffer, "short", 5) == 0) {
-//       sendbuffer[0] = 2;
-//     } else if (strncmp(buffer, "int", 3) == 0) {
-//       sendbuffer[0] = 4;
-//     } else {
-//       printf("Invalid number type entered, %s\n", buffer);
-//       continue;
-//     }
-    
-//     printf("Enter the value of the number to send: ");
-//     fgets(buffer, size, stdin);
-//     num = atol(buffer);
-    
-//     switch(sendbuffer[0]) {
-//       case 1:
-//       *(char *) (sendbuffer+1) = (char) num;
-//       break;
-//       case 2:
-//       /* for 16 bit integer type, byte ordering matters */
-//       *(short *) (sendbuffer+1) = (short) htons(num);
-//       break;
-//       case 4:
-//       /* for 32 bit integer type, byte ordering matters */
-//       *(int *) (sendbuffer+1) = (int) htonl(num);
-//       break;
-//       default:
-//       break;
-//     }
-//     // send(sock, sendbuffer, sendbuffer[0]+1, 0);
-//     send(sock, "PING", 5, 0);
-//   }
-  
   return 0;
 }

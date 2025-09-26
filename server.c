@@ -262,17 +262,17 @@ int main(int argc, char **argv) {
         // while (1) {
         //   // int ping_receive = recv(new_sock, buf, 5, 0);
         //   int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
-          
+        
         //   if (ping_receive <= 0) {
         //     break;
         //   }
-          
+        
         //   fwrite(buf + 18, 1, ping_receive - 18, stdout);
-          
+        
         //   // Now send a pong back.
         //   // int pong_send = send(new_sock, "PONG", 5, 0);
         //   int pong_send = send(new_sock, buf, ping_receive, 0);
-          
+        
         //   if (pong_send < 0) {
         //     printf("Error with sending.\n");
         //     break;
@@ -289,7 +289,7 @@ int main(int argc, char **argv) {
         more pending data */
         for (current = head.next; current; current = next) {
           int flag = 0;
-
+          
           next = current->next;
           
           /* see if we can now do some previously unsuccessful writes */
@@ -300,21 +300,21 @@ int main(int argc, char **argv) {
             // remember to wrap in an if to check if pending_data here
             uint16_t data_size;
             memcpy(&data_size, (current->stat).s_stat.send_data, 2);
-
+            
             data_size = ntohs(data_size);
             
             // while might need changing
             while ((current->stat).s_stat.num_send < data_size) {
               unsigned char *next_send = (current->stat).s_stat.send_data + (current->stat).s_stat.num_send;
               ssize_t pong_send = send(current->socket, next_send, data_size - (current->stat).s_stat.num_send, 0);
-
+              
               if (pong_send == 0) {
                 flag = 1;
                 close(current->socket);
                 dump(&head, current->socket);
                 break;
               }
-
+              
               if (pong_send < 0) {
                 if (errno == EWOULDBLOCK || errno == EAGAIN) break;
                 flag = 1;
@@ -324,17 +324,17 @@ int main(int argc, char **argv) {
               }
               if (pong_send > 0) {
                 (current->stat).s_stat.num_send += pong_send;
-
+                
                 if ((current->stat).s_stat.num_send == data_size) {
                   (current->stat).s_stat.num_send = current->pending_data = 0;
                   break;
                 }
               }
-
+              
             }
-
+            
             if (flag) continue;
-
+            
             /* the socket data structure should have information
             describing what data is supposed to be sent next.
             but here for simplicity, let's say we are just
@@ -361,74 +361,164 @@ int main(int argc, char **argv) {
           
           // here checking if sock can read
           if (FD_ISSET(current->socket, &read_set)) {
-            /* we have data from a client */
-            count = recv(current->socket, buf, BUF_LEN, 0);
-            if (count <= 0) {
-              /* something is wrong */
-              if (count == 0) {
-                printf("Client closed connection. Client IP address is: %s\n", inet_ntoa(current->client_addr.sin_addr));
-              } else {
-                printf("perror\n");
-                perror("error receiving from a client");
+            
+            while (1) {
+              size_t received_buf_size = sizeof((current->stat).r_stat.rec_data);
+              size_t received_size = (current->stat).r_stat.num_rec;
+              
+              if (!(received_buf_size - received_size)) {
+                flag = 1;
+                close(current->socket);
+                dump(&head, current->socket);
+                break;
               }
               
-              /* connection is closed, clean up */
-              close(current->socket);
-              dump(&head, current->socket);
-            } else {
-              printf(buf);
-              /* we got count bytes of data from the client */
-              /* in general, the amount of data received in a recv()
-              call may not be a complete application message. it
-              is important to check the data received against
-              the message format you expect. if only a part of a
-              message has been received, you must wait and
-              receive the rest later when more data is available
-              to be read */
-              /* in this case, we expect a message where the first byte
-              stores the number of bytes used to encode a number, 
-              followed by that many bytes holding a numeric value */
-              if (buf[0]+1 != count) {
-                /* we got only a part of a message, we won't handle this in
-                this simple example */
-                printf("Message incomplete, something is still being transmitted\n");
-                return 0;
-              } else {
-                switch(buf[0]) {
-                  case 1:
-                  /* note the type casting here forces signed extension
-                  to preserve the signedness of the value */
-                  /* note also the use of parentheses for pointer 
-                  dereferencing is critical here */
-                  num = (char) *(char *)(buf+1);
-                  break;
-                  case 2:
-                  /* note the type casting here forces signed extension
-                  to preserve the signedness of the value */
-                  /* note also the use of parentheses for pointer 
-                  dereferencing is critical here */
-                  /* note for 16 bit integers, byte ordering matters */
-                  num = (short) ntohs(*(short *)(buf+1));
-                  break;
-                  case 4:
-                  /* note the type casting here forces signed extension
-                  to preserve the signedness of the value */
-                  /* note also the use of parentheses for pointer 
-                  dereferencing is critical here */
-                  /* note for 32 bit integers, byte ordering matters */
-                  num = (int) ntohl(*(int *)(buf+1));
-                  break;
-                  default:
+              unsigned char *next_receive = (current->stat).r_stat.rec_data + (current->stat).r_stat.num_rec;
+              ssize_t ping_receive = recv(current->socket, next_receive, received_buf_size - received_size, 0);
+              
+              if (ping_receive > 0) {
+                (current->stat).r_stat.num_rec += ping_receive;
+                
+                while (1) {
+                  if ((current->stat).r_stat.num_rec < 2) {
+                    // can't do anything till we get the sz
+                    break; 
+                  }
+                  
+                  uint16_t data_size;
+                  memcpy(&data_size, (current->stat).r_stat.rec_data, 2);
+                  
+                  data_size = ntohs(data_size);
+
+                  if (!data_size) {
+                    flag = 1;
+                    close(current->socket);
+                    dump(&head, current->socket);
+                    break;
+                  }
+                  
+                  // 
+                  
+                  if (((current->stat).r_stat.num_rec < data_size) || (current->pending_data))   {
+                    break;
+                  }
+                  
+                  //
+                  
+                  (current->stat).s_stat.num_send = 0;
+                  memcpy((current->stat).s_stat.send_data, (current->stat).r_stat.rec_data, data_size);
+                  current->pending_data = 1;
+                  
+                  // let's show what we got, REMOVE FOR FINAL VERSION
+                  if (data_size >= 18) {
+                    fwrite(18 + (current->stat).r_stat.rec_data, 1, data_size - 18, stdout);
+                    printf("\n");
+                    fflush(stdout);
+                  }
+                  
+                  unsigned char *src_loc = data_size + (current->stat).r_stat.rec_data;
+                  memmove((current->stat).r_stat.rec_data, src_loc, (current->stat).r_stat.num_rec - data_size);
+                  
+                  (current->stat).r_stat.num_rec = ((current->stat).r_stat.num_rec - data_size);
+                }
+                
+                if (flag) {
                   break;
                 }
-                /* a complete message is received, print it out */
-                printf("Received the number \"%d\". Client IP address is: %s\n",
-                  num, inet_ntoa(current->client_addr.sin_addr));
+                
+                continue;
+              }
+              else if (ping_receive == 0) {
+                flag = 1;
+                close(current->socket);
+                dump(&head, current->socket);
+                break;
+              }
+              else if (ping_receive < 0) {
+                if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                  break;
+                }
+                else {
+                  flag = 1;
+                  close(current->socket);
+                  dump(&head, current->socket);
+                  break;
                 }
               }
             }
+            
+            if (flag) {
+              continue;
+            }
+            
+            /* we have data from a client */
+            // count = recv(current->socket, buf, BUF_LEN, 0);
+            // if (count <= 0) {
+            //   /* something is wrong */
+            //   if (count == 0) {
+            //     printf("Client closed connection. Client IP address is: %s\n", inet_ntoa(current->client_addr.sin_addr));
+            //   } else {
+            //     printf("perror\n");
+            //     perror("error receiving from a client");
+            //   }
+            
+            //   /* connection is closed, clean up */
+            //   close(current->socket);
+            //   dump(&head, current->socket);
+            // } else {
+            //   printf(buf);
+            //   /* we got count bytes of data from the client */
+            //   /* in general, the amount of data received in a recv()
+            //   call may not be a complete application message. it
+            //   is important to check the data received against
+            //   the message format you expect. if only a part of a
+            //   message has been received, you must wait and
+            //   receive the rest later when more data is available
+            //   to be read */
+            //   /* in this case, we expect a message where the first byte
+            //   stores the number of bytes used to encode a number, 
+            //   followed by that many bytes holding a numeric value */
+            //   if (buf[0]+1 != count) {
+            //     /* we got only a part of a message, we won't handle this in
+            //     this simple example */
+            //     printf("Message incomplete, something is still being transmitted\n");
+            //     return 0;
+            //   } else {
+            //     switch(buf[0]) {
+            //       case 1:
+            //       /* note the type casting here forces signed extension
+            //       to preserve the signedness of the value */
+            //       /* note also the use of parentheses for pointer 
+            //       dereferencing is critical here */
+            //       num = (char) *(char *)(buf+1);
+            //       break;
+            //       case 2:
+            //       /* note the type casting here forces signed extension
+            //       to preserve the signedness of the value */
+            //       /* note also the use of parentheses for pointer 
+            //       dereferencing is critical here */
+            //       /* note for 16 bit integers, byte ordering matters */
+            //       num = (short) ntohs(*(short *)(buf+1));
+            //       break;
+            //       case 4:
+            //       /* note the type casting here forces signed extension
+            //       to preserve the signedness of the value */
+            //       /* note also the use of parentheses for pointer 
+            //       dereferencing is critical here */
+            //       /* note for 32 bit integers, byte ordering matters */
+            //       num = (int) ntohl(*(int *)(buf+1));
+            //       break;
+            //       default:
+            //       break;
+            //     }
+            //     /* a complete message is received, print it out */
+            //     printf("Received the number \"%d\". Client IP address is: %s\n",
+            //       num, inet_ntoa(current->client_addr.sin_addr));
+            //     }
+            //   }
           }
         }
       }
     }
-    
+  }
+  
