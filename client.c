@@ -40,13 +40,10 @@ int main(int argc, char** argv) {
     freeaddrinfo(getaddrinfo_result);
   }
   
-  /* server port number */
   unsigned short server_port = atoi (argv[2]);
 
-  /* size in bytes of each message to send*/
   unsigned int size_param = atoi (argv[3]); 
 
-  /* number of message exchanges to perform */
   unsigned int count_param = atoi (argv[4]); 
 
   // just for making sure the message is being sent correctly, we can remove later
@@ -157,11 +154,6 @@ int main(int argc, char** argv) {
     // let's record the receiving timestamp
     struct timeval tval_curr;
     gettimeofday(&tval_curr, NULL);
-
-    // if (pong_receive <= 0) {
-    //   printf("Error with receiving.\n");
-    //   break;
-    // }
 
     uint64_t orig_time1;
     memcpy(&orig_time1, pong + 2, 8);

@@ -107,21 +107,14 @@ int main(int argc, char **argv) {
   // char *message = "Welcome! COMP/ELEC 429 Students!\n";
   
   /* number of bytes sent/received */
-  int count;
+  // int count;
   
   /* numeric value received */
-  int num;
+  // int num;
   
   /* linked list for keeping track of connected sockets */
   struct node head;
   struct node *current, *next;
-  
-  // /* a buffer to read data */
-  // // char *buf;
-  // int BUF_LEN = 1000;
-  
-  // // buf = (char *)malloc(BUF_LEN);
-  // unsigned char buf[65536];
   
   /* initialize dummy head node of linked list */
   head.socket = -1;
@@ -238,51 +231,12 @@ int main(int argc, char **argv) {
         printf("Accepted connection. Client IP address is: %s\n",
           inet_ntoa(addr.sin_addr));
           
-          // int ping_length = recv(current->socket, buf, BUF_LEN, 0);
-          // if (ping_length) {
-          //   printf(buf);
-          // }
           
           /* remember this client connection in our linked list */
           add(&head, new_sock, addr);
           
-          // change 1 made 
-          /* let's send a message to the client just for fun */
-          // count = send(new_sock, message, strlen(message)+1, 0);
-          // count = send(new_sock, "PONG", 5, 0);
-          // if (count < 0)
-          // {
-          //   perror("error sending message to client");
-          //   abort();
-          // }
         }
         
-        // Client accepted the connection, now let's receive their ping.
-        
-        // while (1) {
-        //   // int ping_receive = recv(new_sock, buf, 5, 0);
-        //   int ping_receive = recv(new_sock, buf, sizeof(buf), 0);
-        
-        //   if (ping_receive <= 0) {
-        //     break;
-        //   }
-        
-        //   fwrite(buf + 18, 1, ping_receive - 18, stdout);
-        
-        //   // Now send a pong back.
-        //   // int pong_send = send(new_sock, "PONG", 5, 0);
-        //   int pong_send = send(new_sock, buf, ping_receive, 0);
-        
-        //   if (pong_send < 0) {
-        //     printf("Error with sending.\n");
-        //     break;
-        //   }
-        // }
-        
-        
-        // printf("got here server\n");
-        
-        // return 0;
         
         /* check other connected sockets, see if there is
         anything to read or some socket is ready to send
@@ -316,7 +270,7 @@ int main(int argc, char **argv) {
               }
               
               if (pong_send < 0) {
-                if (errno == EWOULDBLOCK || errno == EAGAIN) break;
+                if (errno == EAGAIN) break;
                 flag = 1;
                 close(current->socket);
                 dump(&head, current->socket);
@@ -334,29 +288,7 @@ int main(int argc, char **argv) {
             }
             
             if (flag) continue;
-            
-            /* the socket data structure should have information
-            describing what data is supposed to be sent next.
-            but here for simplicity, let's say we are just
-            sending whatever is in the buffer buf
-            */
-            // count = send(current->socket, buf, BUF_LEN, MSG_DONTWAIT);
-            // if (count < 0) {
-            //   if (errno == EAGAIN) {
-            //     /* we are trying to dump too much data down the socket,
-            //     it cannot take more for the time being 
-            //     will have to go back to select and wait til select
-            //     tells us the socket is ready for writing
-            //     */
-            //   } else {
-            //     /* something else is wrong */
-            //   }
-            // }
-            /* note that it is important to check count for exactly
-            how many bytes were actually sent even when there are
-            no error. send() may send only a portion of the buffer
-            to be sent.
-            */
+          
           }
           
           // here checking if sock can read
@@ -397,13 +329,9 @@ int main(int argc, char **argv) {
                     break;
                   }
                   
-                  // 
-                  
                   if (((current->stat).r_stat.num_rec < data_size) || (current->pending_data))   {
                     break;
                   }
-                  
-                  //
                   
                   (current->stat).s_stat.num_send = 0;
                   memcpy((current->stat).s_stat.send_data, (current->stat).r_stat.rec_data, data_size);
@@ -435,7 +363,7 @@ int main(int argc, char **argv) {
                 break;
               }
               else if (ping_receive < 0) {
-                if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                if (errno == EAGAIN) {
                   break;
                 }
                 else {
